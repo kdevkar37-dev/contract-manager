@@ -1,0 +1,51 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Test / coverage
+.coverage
+htmlcov/
+
+# ChromaDB
+chroma_data/
+
+# Uploaded documents
+uploads/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
