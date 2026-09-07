@@ -39,3 +39,14 @@ class ContractRepository:
         except IntegrityError:
             self.db.rollback()
             raise
+
+    def update(self, contract: Contract) -> Contract:
+        try:
+            self.db.commit()
+            self.db.refresh(contract)
+
+            return contract
+
+        except IntegrityError:
+            self.db.rollback()
+            raise

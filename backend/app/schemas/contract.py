@@ -11,6 +11,13 @@ class ContractCreate(BaseModel):
     end_date: date | None = None
 
 
+class ContractUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+
+
 class ContractResponse(BaseModel):
     id: int
     contract_id: str

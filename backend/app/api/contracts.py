@@ -3,7 +3,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.schemas.contract import ContractCreate, ContractResponse
+from backend.app.schemas.contract import (
+    ContractCreate,
+    ContractResponse,
+    ContractUpdate,
+)
 from backend.app.services.contracts.service import ContractService
 
 
@@ -66,4 +70,36 @@ def create_contract(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Contract ID already exists",
+        )
+
+
+@router.patch(
+    "/{contract_id}",
+    response_model=ContractResponse,
+)
+def update_contract(
+    contract_id: str,
+    contract_data: ContractUpdate,
+    db: Session = Depends(get_db),
+):
+    service = ContractService(db)
+
+    try:
+        contract = service.update_contract(
+            contract_id,
+            contract_data,
+        )
+
+        if contract is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Contract not found",
+            )
+
+        return contract
+
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Contract update failed",
         )

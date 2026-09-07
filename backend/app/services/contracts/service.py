@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.contract import Contract
 from backend.app.repositories.contracts import ContractRepository
-from backend.app.schemas.contract import ContractCreate
+from backend.app.schemas.contract import ContractCreate, ContractUpdate
 
 
 class ContractService:
@@ -31,3 +31,24 @@ class ContractService:
         )
 
         return self.repository.create(contract)
+
+    def update_contract(
+        self,
+        contract_id: str,
+        contract_data: ContractUpdate,
+    ) -> Contract | None:
+        contract = self.repository.get_by_contract_id(
+            contract_id
+        )
+
+        if contract is None:
+            return None
+
+        update_data = contract_data.model_dump(
+            exclude_unset=True
+        )
+
+        for field, value in update_data.items():
+            setattr(contract, field, value)
+
+        return self.repository.update(contract)
