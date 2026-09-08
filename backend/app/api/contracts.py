@@ -2,13 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ai.rag.chain import ContractRAGChain
 from backend.app.core.database import get_db
 from backend.app.schemas.contract import (
+    ContractAskRequest,
+    ContractAskResponse,
     ContractCreate,
     ContractResponse,
     ContractUpdate,
 )
 from backend.app.services.contracts.service import ContractService
+from backend.app.services.documents.contract_processing_service import (
+    ContractProcessingService,
+)
 
 
 router = APIRouter(
@@ -102,4 +108,59 @@ def update_contract(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Contract update failed",
+        )
+
+
+@router.post(
+    "/{contract_id}/process",
+)
+def process_contract(
+    contract_id: str,
+    db: Session = Depends(get_db),
+):
+    service = ContractProcessingService(db)
+
+    try:
+        text = service.extract_contract_text(contract_id)
+
+        return {
+            "contract_id": contract_id,
+            "status": "processed",
+            "text": text,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        )
+
+
+@router.post(
+    "/{contract_id}/ask",
+    response_model=ContractAskResponse,
+)
+def ask_contract(
+    contract_id: str,
+    request: ContractAskRequest,
+):
+    rag_chain = ContractRAGChain()
+
+    try:
+        result = rag_chain.ask(
+            contract_id=contract_id,
+            question=request.question,
+        )
+
+        return ContractAskResponse(
+            contract_id=contract_id,
+            question=request.question,
+            answer=result["answer"],
+            sources=result["sources"],
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"RAG query failed: {exc}",
         )

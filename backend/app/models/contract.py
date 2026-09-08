@@ -40,3 +40,30 @@ class Contract(Base):
         Date,
         nullable=True,
     )
+
+    source_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="manual",
+    )
+
+    original_filename: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    mime_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    storage_key: Mapped[str | None] = mapped_column(
+    String(500),
+    nullable=True,
+)
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="pending",
+    )
