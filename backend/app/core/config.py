@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str
 
     max_upload_size_mb: int = 25
+    cors_origins: str = "http://localhost:5173"
 
     jwt_secret: str
     jwt_algorithm: str = "HS256"

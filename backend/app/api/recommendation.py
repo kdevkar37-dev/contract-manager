@@ -1,11 +1,17 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
 from backend.app.core.permissions import require_authenticated
+from backend.app.services.audit.service import AuditLogService
 from backend.app.services.decision.recommendation_service import (
     ContractRecommendationIntegrationService,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -34,13 +40,25 @@ def get_contract_recommendations(
 
         recommendations = service.recommend_all()
 
+        AuditLogService(db).record(
+            user_id=current_user.id,
+            action="RECOMMENDATIONS_GENERATED",
+            resource_type="contract_recommendation",
+            details="Contract recommendations were generated successfully.",
+        )
+
         return {
             "count": len(recommendations),
             "recommendations": recommendations,
         }
 
-    except Exception as exc:
+    except Exception:
+        logger.exception(
+            "Recommendation generation failed for user_id=%s",
+            current_user.id,
+        )
+
         raise HTTPException(
             status_code=500,
-            detail=f"Recommendation generation failed: {exc}",
-        ) from exc
+            detail="Recommendation generation failed due to an internal server error.",
+        )

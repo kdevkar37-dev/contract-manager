@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,8 +13,12 @@ from backend.app.schemas.financial import (
     FinancialAnalysisRequest,
     FinancialAnalysisResponse,
 )
+from backend.app.services.audit.service import AuditLogService
 from backend.app.services.financial.engine import FinancialInputs
 from backend.app.services.financial.service import FinancialAnalysisService
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -135,11 +140,32 @@ def calculate_financial_analysis(
             inputs=inputs,
         )
 
+        AuditLogService(db).record(
+            user_id=current_user.id,
+            action="FINANCIAL_ANALYSIS_CALCULATED",
+            resource_type="contract",
+            resource_id=contract_id,
+            details="Financial analysis calculated and persisted.",
+        )
+
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+    except Exception:
+        logger.exception(
+            "Financial analysis calculation failed for "
+            "contract_id=%s user_id=%s",
+            contract_id,
+            current_user.id,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Financial analysis failed due to an internal server error.",
+        )
 
     return _build_response(
         contract_id=contract_id,
@@ -182,11 +208,32 @@ def get_financial_analysis(
             detail=str(exc),
         ) from exc
 
+    except Exception:
+        logger.exception(
+            "Financial analysis retrieval failed for "
+            "contract_id=%s user_id=%s",
+            contract_id,
+            current_user.id,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Financial analysis retrieval failed due to an internal server error.",
+        )
+
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Financial analysis not found",
         )
+
+    AuditLogService(db).record(
+        user_id=current_user.id,
+        action="FINANCIAL_ANALYSIS_VIEWED",
+        resource_type="contract",
+        resource_id=contract_id,
+        details="Financial analysis was viewed.",
+    )
 
     return _build_response(
         contract_id=contract_id,

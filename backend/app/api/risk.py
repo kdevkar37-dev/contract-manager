@@ -1,10 +1,16 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
 from backend.app.core.permissions import require_authenticated
 from backend.app.schemas.risk import RiskAnalysisResponse
+from backend.app.services.audit.service import AuditLogService
 from backend.app.services.risk.service import RiskAnalysisService
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -30,6 +36,7 @@ def get_contract_risks(
         - manager
         - viewer
     """
+
     service = RiskAnalysisService(db)
 
     try:
@@ -42,6 +49,27 @@ def get_contract_risks(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+    except Exception:
+        logger.exception(
+            "Risk analysis retrieval failed for "
+            "contract_id=%s user_id=%s",
+            contract_id,
+            current_user.id,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Risk analysis retrieval failed due to an internal server error.",
+        )
+
+    AuditLogService(db).record(
+        user_id=current_user.id,
+        action="RISK_ANALYSIS_VIEWED",
+        resource_type="contract",
+        resource_id=contract_id,
+        details="Risk analysis was viewed.",
+    )
 
     return [
         RiskAnalysisResponse(

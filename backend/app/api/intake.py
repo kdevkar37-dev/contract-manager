@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
 from backend.app.core.permissions import require_contract_manager
+from backend.app.services.audit.service import AuditLogService
 from backend.app.services.intake.service import IntakeService
 from backend.app.workers.tasks import process_contract_task
 
@@ -60,6 +61,14 @@ async def upload_contract(
             filename=filename,
             content_type=content_type,
             storage_key=storage_key,
+        )
+
+        AuditLogService(db).record(
+            user_id=current_user.id,
+            action="CONTRACT_UPLOADED",
+            resource_type="contract",
+            resource_id=contract.contract_id,
+            details=f"Uploaded contract file: {filename}",
         )
 
         process_contract_task.delay(contract.contract_id)
