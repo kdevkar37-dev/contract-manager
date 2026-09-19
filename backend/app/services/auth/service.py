@@ -27,7 +27,6 @@ class AuthenticationService:
         self,
         email: str,
         password: str,
-        role: str = "viewer",
     ) -> User:
         normalized_email = email.strip().lower()
 
@@ -41,7 +40,7 @@ class AuthenticationService:
         user = User(
             email=normalized_email,
             password_hash=hash_password(password),
-            role=role,
+            role="viewer",
             is_active=True,
         )
 

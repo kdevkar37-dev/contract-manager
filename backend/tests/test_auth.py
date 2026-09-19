@@ -2,19 +2,23 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from backend.app.core.auth import get_current_user, require_roles
-from backend.app.core.security import create_access_token
+from backend.app.core.security import create_access_token, hash_password
 from backend.app.models.user import User
-from backend.app.services.auth.service import AuthenticationService
 
 
 def create_test_user(db_session, email="auth@example.com", role="viewer"):
-    service = AuthenticationService(db_session)
-
-    return service.register(
+    user = User(
         email=email,
-        password="Test@123",
+        password_hash=hash_password("Test@123"),
         role=role,
+        is_active=True,
     )
+
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    return user
 
 
 def test_get_current_user_with_valid_token(db_session):
