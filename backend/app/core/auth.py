@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -24,7 +25,7 @@ def get_current_user(
 
     try:
         payload = decode_access_token(token)
-    except Exception as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token.",
@@ -87,7 +88,7 @@ def require_roles(*allowed_roles: str):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to perform this action.",
-            )
+        )
 
         return current_user
 
