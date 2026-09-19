@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.repositories.contract_documents import ContractDocumentRepository
+from backend.app.core.permissions import require_authenticated
+from backend.app.repositories.contract_documents import (
+    ContractDocumentRepository,
+)
 from backend.app.repositories.contracts import ContractRepository
 
 
@@ -16,10 +19,22 @@ router = APIRouter(
 def get_contract_document(
     contract_id: str,
     db: Session = Depends(get_db),
+    current_user=Depends(require_authenticated),
 ):
+    """
+    Get the processed document information for a contract.
+
+    Accessible to:
+        - admin
+        - manager
+        - viewer
+    """
+
     contract_repository = ContractRepository(db)
 
-    contract = contract_repository.get_by_contract_id(contract_id)
+    contract = contract_repository.get_by_contract_id(
+        contract_id
+    )
 
     if contract is None:
         raise HTTPException(
@@ -29,7 +44,9 @@ def get_contract_document(
 
     document_repository = ContractDocumentRepository(db)
 
-    document = document_repository.get_by_contract_id(contract.id)
+    document = document_repository.get_by_contract_id(
+        contract.id
+    )
 
     if document is None:
         raise HTTPException(

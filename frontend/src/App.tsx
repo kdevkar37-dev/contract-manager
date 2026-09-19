@@ -1,9 +1,10 @@
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Contracts from "./pages/Contracts";
-import MainLayout from "./layouts/MainLayout";
+import Login from "./pages/login";
+import Dashboard from "./pages/dashboard";
+import Contracts from "./pages/contracts";
+import ContractDetails from "./pages/contractDetails";
+import MainLayout from "./layouts/mainLayout";
 
 function App() {
   return (
@@ -14,9 +15,16 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/contracts" element={<Contracts />} />
+          <Route
+            path="/contracts/:contractId"
+            element={<ContractDetails />}
+          />
         </Route>
 
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route
+          path="/"
+          element={<Navigate to="/dashboard" replace />}
+        />
       </Routes>
     </BrowserRouter>
   );

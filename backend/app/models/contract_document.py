@@ -1,6 +1,12 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Text
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -8,6 +14,13 @@ from backend.app.models.base import Base
 
 class ContractDocument(Base):
     __tablename__ = "contract_documents"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "contract_id",
+            name="uq_contract_documents_contract_id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer,

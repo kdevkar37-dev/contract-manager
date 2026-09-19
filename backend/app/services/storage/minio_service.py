@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import BinaryIO
 
 from minio import Minio
 
@@ -23,18 +24,17 @@ class MinioStorageService:
     def upload_file(
         self,
         object_name: str,
-        file_data: bytes,
+        file_data: BinaryIO,
+        file_size: int,
         content_type: str,
     ) -> str:
         self.ensure_bucket_exists()
 
-        from io import BytesIO
-
         self.client.put_object(
             self.bucket,
             object_name,
-            BytesIO(file_data),
-            length=len(file_data),
+            file_data,
+            length=file_size,
             content_type=content_type,
         )
 

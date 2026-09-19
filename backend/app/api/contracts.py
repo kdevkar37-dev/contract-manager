@@ -3,7 +3,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ai.rag.chain import ContractRAGChain
+
 from backend.app.core.database import get_db
+from backend.app.core.permissions import (
+    require_authenticated,
+    require_contract_manager,
+)
+from backend.app.repositories.contracts import ContractRepository
 from backend.app.schemas.contract import (
     ContractAskRequest,
     ContractAskResponse,
@@ -12,9 +18,7 @@ from backend.app.schemas.contract import (
     ContractUpdate,
 )
 from backend.app.services.contracts.service import ContractService
-from backend.app.services.documents.contract_processing_service import (
-    ContractProcessingService,
-)
+from backend.app.workers.tasks import process_contract_task
 
 
 router = APIRouter(
@@ -23,19 +27,36 @@ router = APIRouter(
 )
 
 
+# ============================================================
+# GET ALL CONTRACTS
+# ============================================================
+
 @router.get(
     "/",
     response_model=list[ContractResponse],
 )
 def get_contracts(
     db: Session = Depends(get_db),
+    current_user=Depends(require_authenticated),
 ):
+    """
+    Get all contracts.
+
+    Accessible to:
+        - admin
+        - manager
+        - viewer
+    """
     service = ContractService(db)
 
     contracts = service.get_all_contracts()
 
     return contracts
 
+
+# ============================================================
+# GET SINGLE CONTRACT
+# ============================================================
 
 @router.get(
     "/{contract_id}",
@@ -44,7 +65,16 @@ def get_contracts(
 def get_contract(
     contract_id: str,
     db: Session = Depends(get_db),
+    current_user=Depends(require_authenticated),
 ):
+    """
+    Get a single contract by contract ID.
+
+    Accessible to:
+        - admin
+        - manager
+        - viewer
+    """
     service = ContractService(db)
 
     contract = service.get_contract_by_id(contract_id)
@@ -58,6 +88,10 @@ def get_contract(
     return contract
 
 
+# ============================================================
+# CREATE CONTRACT
+# ============================================================
+
 @router.post(
     "/",
     response_model=ContractResponse,
@@ -66,18 +100,33 @@ def get_contract(
 def create_contract(
     contract_data: ContractCreate,
     db: Session = Depends(get_db),
+    current_user=Depends(require_contract_manager),
 ):
+    """
+    Create a new contract.
+
+    Accessible to:
+        - admin
+        - manager
+
+    Not accessible to:
+        - viewer
+    """
     service = ContractService(db)
 
     try:
         return service.create_contract(contract_data)
 
-    except IntegrityError:
+    except IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Contract ID already exists",
-        )
+        ) from exc
 
+
+# ============================================================
+# UPDATE CONTRACT
+# ============================================================
 
 @router.patch(
     "/{contract_id}",
@@ -87,7 +136,18 @@ def update_contract(
     contract_id: str,
     contract_data: ContractUpdate,
     db: Session = Depends(get_db),
+    current_user=Depends(require_contract_manager),
 ):
+    """
+    Update an existing contract.
+
+    Accessible to:
+        - admin
+        - manager
+
+    Not accessible to:
+        - viewer
+    """
     service = ContractService(db)
 
     try:
@@ -104,37 +164,65 @@ def update_contract(
 
         return contract
 
-    except IntegrityError:
+    except IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Contract update failed",
-        )
+        ) from exc
 
+
+# ============================================================
+# PROCESS CONTRACT
+# ============================================================
 
 @router.post(
     "/{contract_id}/process",
+    status_code=status.HTTP_202_ACCEPTED,
 )
 def process_contract(
     contract_id: str,
     db: Session = Depends(get_db),
+    current_user=Depends(require_contract_manager),
 ):
-    service = ContractProcessingService(db)
+    """
+    Queue contract processing using Celery.
 
-    try:
-        text = service.extract_contract_text(contract_id)
+    Accessible to:
+        - admin
+        - manager
 
-        return {
-            "contract_id": contract_id,
-            "status": "processed",
-            "text": text,
-        }
+    Not accessible to:
+        - viewer
+    """
+    repository = ContractRepository(db)
 
-    except ValueError as exc:
+    contract = repository.get_by_contract_id(contract_id)
+
+    if contract is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
+            detail="Contract not found",
         )
 
+    if not contract.storage_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Contract does not have a stored document",
+        )
+
+    task = process_contract_task.delay(contract_id)
+
+    return {
+        "contract_id": contract_id,
+        "status": "queued",
+        "task_id": task.id,
+        "message": "Contract processing has been queued.",
+    }
+
+
+# ============================================================
+# ASK CONTRACT USING RAG
+# ============================================================
 
 @router.post(
     "/{contract_id}/ask",
@@ -143,7 +231,16 @@ def process_contract(
 def ask_contract(
     contract_id: str,
     request: ContractAskRequest,
+    current_user=Depends(require_authenticated),
 ):
+    """
+    Ask a question about a contract using the RAG pipeline.
+
+    Accessible to:
+        - admin
+        - manager
+        - viewer
+    """
     rag_chain = ContractRAGChain()
 
     try:
@@ -163,4 +260,4 @@ def ask_contract(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"RAG query failed: {exc}",
-        )
+        ) from exc

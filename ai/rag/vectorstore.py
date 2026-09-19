@@ -22,7 +22,7 @@ class ChromaVectorStore:
         embeddings: list[list[float]],
         metadatas: list[dict],
     ) -> None:
-        self.collection.add(
+        self.collection.upsert(
             ids=ids,
             documents=documents,
             embeddings=embeddings,

@@ -1,8 +1,6 @@
 from pathlib import Path
 
-from backend.app.services.storage.minio_service import (
-    MinioStorageService,
-)
+from backend.app.services.storage.minio_service import MinioStorageService
 
 
 def test_minio_upload_and_download(tmp_path: Path):
@@ -16,7 +14,8 @@ def test_minio_upload_and_download(tmp_path: Path):
 
     uploaded_object = service.upload_file(
         object_name=object_name,
-        file_data=file_data,
+        file_data=__import__("io").BytesIO(file_data),
+        file_size=len(file_data),
         content_type="text/plain",
     )
 
@@ -30,5 +29,4 @@ def test_minio_upload_and_download(tmp_path: Path):
     )
 
     assert downloaded_file == str(destination)
-
     assert destination.read_bytes() == file_data

@@ -22,6 +22,11 @@ def test_contract_processing_indexes_extracted_text():
 
     document = MagicMock(id=10)
 
+    # No existing document -> service should create one.
+    service.document_repository.get_by_contract_id = MagicMock(
+        return_value=None
+    )
+
     service.document_repository.create = MagicMock(
         return_value=document
     )
@@ -32,8 +37,24 @@ def test_contract_processing_indexes_extracted_text():
         return_value="This is contract text."
     )
 
+    # Mock RAG indexing.
     service.indexing_service.index_contract = MagicMock(
         return_value=1
+    )
+
+    # Mock structured contract information extraction/persistence.
+    service.contract_information_service.extract_and_save = MagicMock()
+
+    # Mock financial extraction and calculation.
+    service.financial_extraction_service.extract = MagicMock(
+        return_value=MagicMock()
+    )
+
+    service.financial_analysis_service.calculate_for_contract = MagicMock()
+
+    # Mock risk analysis.
+    service.risk_analysis_service.analyze_contract = MagicMock(
+        return_value=[]
     )
 
     result = service.extract_contract_text("CNT-001")
@@ -42,6 +63,22 @@ def test_contract_processing_indexes_extracted_text():
         contract_id="CNT-001",
         document_id=10,
         extracted_text="This is contract text.",
+    )
+
+    service.contract_information_service.extract_and_save.assert_called_once_with(
+        contract_id="CNT-001",
+        contract_text="This is contract text.",
+    )
+
+    service.financial_extraction_service.extract.assert_called_once_with(
+        "This is contract text.",
+    )
+
+    service.financial_analysis_service.calculate_for_contract.assert_called_once()
+
+    service.risk_analysis_service.analyze_contract.assert_called_once_with(
+        contract_id="CNT-001",
+        contract_text="This is contract text.",
     )
 
     assert result == "This is contract text."
