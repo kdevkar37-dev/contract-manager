@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 import json
 import re
@@ -20,9 +21,21 @@ class ContractInformationExtractionResult(BaseModel):
     )
 
     currency: str | None = None
+
+    start_date: date | None = None
+    end_date: date | None = None
+
     payment_terms: str | None = None
     renewal_terms: str | None = None
     termination_terms: str | None = None
+
+    penalties: list[str] = Field(
+        default_factory=list,
+    )
+
+    liabilities: list[str] = Field(
+        default_factory=list,
+    )
 
     obligations: list[str] = Field(
         default_factory=list,
@@ -53,6 +66,8 @@ class ContractInformationExtractionResult(BaseModel):
             ) from exc
 
     @field_validator(
+        "penalties",
+        "liabilities",
         "obligations",
         "dependencies",
         mode="before",
@@ -84,9 +99,17 @@ class ExtractedContractInformation:
     vendor_name: str | None
     contract_value: Decimal | None
     currency: str | None
+
+    start_date: date | None
+    end_date: date | None
+
     payment_terms: str | None
     renewal_terms: str | None
     termination_terms: str | None
+
+    penalties: list[str]
+    liabilities: list[str]
+
     obligations: list[str]
     dependencies: list[str]
 
@@ -121,12 +144,19 @@ Rules:
 - If information is not present, return null.
 - For obligations, return [] when none are explicitly stated.
 - For dependencies, return [] when none are explicitly stated.
+- For penalties, return [] when none are explicitly stated.
+- For liabilities, return [] when none are explicitly stated.
 - Do NOT treat financial calculations as contract values.
 - contract_value must be the explicitly stated total contract/commercial value.
 - contract_value must be a numeric value only, without currency symbols.
 - currency must contain the explicitly stated currency code or symbol.
-- Keep obligations and dependencies as concise factual items.
-- Do not invent parties, values, terms, obligations, or dependencies.
+- Dates must be explicitly stated.
+- Return dates in YYYY-MM-DD format.
+- Do NOT calculate contract duration.
+- Keep obligations, dependencies, penalties, and liabilities as concise
+  factual items.
+- Do not invent parties, values, dates, terms, obligations, penalties,
+  liabilities, or dependencies.
 - Return ONLY valid JSON.
 - Use double quotes for every JSON key and string.
 - Do NOT use trailing commas.
@@ -138,9 +168,13 @@ client_name
 vendor_name
 contract_value
 currency
+start_date
+end_date
 payment_terms
 renewal_terms
 termination_terms
+penalties
+liabilities
 obligations
 dependencies
 
@@ -161,9 +195,13 @@ Contract:
             vendor_name=result.vendor_name,
             contract_value=result.contract_value,
             currency=result.currency,
+            start_date=result.start_date,
+            end_date=result.end_date,
             payment_terms=result.payment_terms,
             renewal_terms=result.renewal_terms,
             termination_terms=result.termination_terms,
+            penalties=list(result.penalties),
+            liabilities=list(result.liabilities),
             obligations=list(result.obligations),
             dependencies=list(result.dependencies),
         )
@@ -215,7 +253,7 @@ Contract:
 
             # -----------------------------------------------------
             # Second attempt:
-            # Extract the JSON object if the LLM added
+            # Extract JSON object if the LLM added
             # surrounding explanation.
             # -----------------------------------------------------
 
@@ -231,16 +269,6 @@ Contract:
 
             # -----------------------------------------------------
             # Remove trailing commas before } or ]
-            #
-            # Example:
-            # {
-            #     "currency": "INR",
-            # }
-            #
-            # becomes:
-            # {
-            #     "currency": "INR"
-            # }
             # -----------------------------------------------------
 
             candidate = re.sub(

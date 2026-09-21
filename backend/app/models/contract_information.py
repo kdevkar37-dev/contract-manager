@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -42,6 +42,16 @@ class ContractInformation(Base):
         nullable=True,
     )
 
+    start_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
+    end_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
     payment_terms: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
@@ -53,6 +63,16 @@ class ContractInformation(Base):
     )
 
     termination_terms: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    penalties: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    liabilities: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

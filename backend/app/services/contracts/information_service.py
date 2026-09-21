@@ -58,9 +58,21 @@ class ContractInformationService:
         )
 
         information.currency = extracted.currency
+
+        information.start_date = extracted.start_date
+        information.end_date = extracted.end_date
+
         information.payment_terms = extracted.payment_terms
         information.renewal_terms = extracted.renewal_terms
         information.termination_terms = extracted.termination_terms
+
+        information.penalties = json.dumps(
+            extracted.penalties
+        )
+
+        information.liabilities = json.dumps(
+            extracted.liabilities
+        )
 
         information.obligations = json.dumps(
             extracted.obligations
