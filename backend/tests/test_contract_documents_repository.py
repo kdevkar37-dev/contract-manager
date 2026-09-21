@@ -45,8 +45,8 @@ def test_update_extracted_text(db_session):
     )
 
     assert updated_document.extracted_text == "This is extracted contract text."
-    assert updated_document.processing_status == "completed"
-    assert updated_document.processed_at is not None
+    assert updated_document.processing_status == "text_extracted"
+    assert updated_document.processed_at is None
     assert updated_document.error_message is None
 
 
@@ -73,6 +73,7 @@ def test_mark_failed(db_session):
 
     assert failed_document.processing_status == "failed"
     assert failed_document.error_message == "Text extraction failed."
+    assert failed_document.processed_at is None
 
 
 def test_get_by_contract_id(db_session):

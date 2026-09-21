@@ -1,84 +1,166 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from backend.app.services.documents.contract_processing_service import (
-    ContractProcessingService,
-)
+from fastapi.testclient import TestClient
+
+from backend.app.main import app
+from backend.app.models.contract import Contract
 
 
-def test_contract_processing_indexes_extracted_text():
-    db = MagicMock()
-
-    service = ContractProcessingService(db)
-
-    service.repository.get_by_contract_id = MagicMock()
-    service.repository.get_by_contract_id.return_value = MagicMock(
-        contract_id="CNT-001",
-        id=1,
+def create_contract(
+    db_session,
+    *,
+    contract_id: str,
+    status: str,
+):
+    contract = Contract(
+        contract_id=contract_id,
+        name="Retry Test Contract",
+        source_type="manual",
+        status=status,
         storage_key="contracts/test.pdf",
         original_filename="test.pdf",
+        mime_type="application/pdf",
     )
 
-    service.repository.update_status = MagicMock()
+    db_session.add(contract)
+    db_session.commit()
+    db_session.refresh(contract)
 
-    document = MagicMock(id=10)
+    return contract
 
-    # No existing document -> service should create one.
-    service.document_repository.get_by_contract_id = MagicMock(
-        return_value=None
+
+@patch(
+    "backend.app.api.contracts.process_contract_task.delay"
+)
+def test_failed_contract_can_be_retried(
+    mock_delay,
+    db_session,
+    authenticated_test_user,
+):
+    contract = create_contract(
+        db_session,
+        contract_id="RETRY-001",
+        status="failed",
     )
 
-    service.document_repository.create = MagicMock(
-        return_value=document
+    mock_task = MagicMock()
+    mock_task.id = "retry-task-001"
+    mock_delay.return_value = mock_task
+
+    client = TestClient(app)
+
+    response = client.post(
+        f"/contracts/{contract.contract_id}/process"
     )
 
-    service.document_repository.update_extracted_text = MagicMock()
+    assert response.status_code == 202
 
-    service.document_service.extract_text = MagicMock(
-        return_value="This is contract text."
+    data = response.json()
+
+    assert data["contract_id"] == "RETRY-001"
+    assert data["status"] == "queued"
+    assert data["task_id"] == "retry-task-001"
+    assert "retry" in data["message"].lower()
+
+    mock_delay.assert_called_once_with(
+        "RETRY-001"
     )
 
-    # Mock RAG indexing.
-    service.indexing_service.index_contract = MagicMock(
-        return_value=1
+
+@patch(
+    "backend.app.api.contracts.process_contract_task.delay"
+)
+def test_completed_contract_cannot_be_reprocessed(
+    mock_delay,
+    db_session,
+    authenticated_test_user,
+):
+    contract = create_contract(
+        db_session,
+        contract_id="RETRY-002",
+        status="completed",
     )
 
-    # Mock structured contract information extraction/persistence.
-    service.contract_information_service.extract_and_save = MagicMock()
+    client = TestClient(app)
 
-    # Mock financial extraction and calculation.
-    service.financial_extraction_service.extract = MagicMock(
-        return_value=MagicMock()
+    response = client.post(
+        f"/contracts/{contract.contract_id}/process"
     )
 
-    service.financial_analysis_service.calculate_for_contract = MagicMock()
+    assert response.status_code == 409
 
-    # Mock risk analysis.
-    service.risk_analysis_service.analyze_contract = MagicMock(
-        return_value=[]
+    assert response.json() == {
+        "detail": (
+            "Contract processing has already completed."
+        )
+    }
+
+    mock_delay.assert_not_called()
+
+
+@patch(
+    "backend.app.api.contracts.process_contract_task.delay"
+)
+def test_processing_contract_cannot_be_queued_again(
+    mock_delay,
+    db_session,
+    authenticated_test_user,
+):
+    contract = create_contract(
+        db_session,
+        contract_id="RETRY-003",
+        status="processing",
     )
 
-    result = service.extract_contract_text("CNT-001")
+    client = TestClient(app)
 
-    service.indexing_service.index_contract.assert_called_once_with(
-        contract_id="CNT-001",
-        document_id=10,
-        extracted_text="This is contract text.",
+    response = client.post(
+        f"/contracts/{contract.contract_id}/process"
     )
 
-    service.contract_information_service.extract_and_save.assert_called_once_with(
-        contract_id="CNT-001",
-        contract_text="This is contract text.",
+    assert response.status_code == 409
+
+    assert response.json() == {
+        "detail": (
+            "Contract processing is already in progress."
+        )
+    }
+
+    mock_delay.assert_not_called()
+
+
+@patch(
+    "backend.app.api.contracts.process_contract_task.delay"
+)
+def test_pending_contract_can_be_queued(
+    mock_delay,
+    db_session,
+    authenticated_test_user,
+):
+    contract = create_contract(
+        db_session,
+        contract_id="RETRY-004",
+        status="pending",
     )
 
-    service.financial_extraction_service.extract.assert_called_once_with(
-        "This is contract text.",
+    mock_task = MagicMock()
+    mock_task.id = "processing-task-001"
+    mock_delay.return_value = mock_task
+
+    client = TestClient(app)
+
+    response = client.post(
+        f"/contracts/{contract.contract_id}/process"
     )
 
-    service.financial_analysis_service.calculate_for_contract.assert_called_once()
+    assert response.status_code == 202
 
-    service.risk_analysis_service.analyze_contract.assert_called_once_with(
-        contract_id="CNT-001",
-        contract_text="This is contract text.",
+    data = response.json()
+
+    assert data["contract_id"] == "RETRY-004"
+    assert data["status"] == "queued"
+    assert data["task_id"] == "processing-task-001"
+
+    mock_delay.assert_called_once_with(
+        "RETRY-004"
     )
-
-    assert result == "This is contract text."

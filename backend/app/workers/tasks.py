@@ -4,7 +4,9 @@ import redis
 from celery import Celery
 
 from backend.app.core.config import settings
+from backend.app.core.contract_status import ContractStatus
 from backend.app.core.database import SessionLocal
+from backend.app.repositories.contracts import ContractRepository
 
 
 logger = logging.getLogger(__name__)
@@ -46,8 +48,29 @@ def process_contract_task(contract_id: str) -> str:
     db = SessionLocal()
 
     try:
-        # Import inside the worker task so heavy AI/RAG
-        # dependencies are not initialized by the API process.
+        repository = ContractRepository(db)
+
+        contract = repository.get_by_contract_id(contract_id)
+
+        if contract is None:
+            logger.error(
+                "Contract not found for background processing: %s",
+                contract_id,
+            )
+            return contract_id
+
+        if contract.status == ContractStatus.COMPLETED:
+            logger.info(
+                "Contract already completed. Skipping processing: %s",
+                contract_id,
+            )
+            return contract_id
+
+        logger.info(
+            "Background contract processing started: %s",
+            contract_id,
+        )
+
         from backend.app.services.documents.contract_processing_service import (
             ContractProcessingService,
         )
@@ -56,7 +79,19 @@ def process_contract_task(contract_id: str) -> str:
 
         service.extract_contract_text(contract_id)
 
+        logger.info(
+            "Background contract processing completed: %s",
+            contract_id,
+        )
+
         return contract_id
+
+    except Exception:
+        logger.exception(
+            "Background contract processing failed: %s",
+            contract_id,
+        )
+        raise
 
     finally:
         db.close()

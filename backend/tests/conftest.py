@@ -1,20 +1,27 @@
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from backend.app.main import app
 from backend.app.core.auth import get_current_user
+from backend.app.core.database import get_db
+from backend.app.models.audit_log import AuditLog
 from backend.app.models.base import Base
 from backend.app.models.contract import Contract
 from backend.app.models.contract_document import ContractDocument
 from backend.app.models.user import User
 
 
-TEST_DATABASE_URL = "sqlite:///:memory:"
+TEST_DATABASE_URL = "sqlite://"
+
 
 engine = create_engine(
     TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args={
+        "check_same_thread": False,
+    },
+    poolclass=StaticPool,
 )
 
 
@@ -29,13 +36,12 @@ def db_session():
 
 
 @pytest.fixture(autouse=True)
-def authenticated_test_user():
+def authenticated_test_user(db_session):
     """
     Provide an authenticated manager user for API tests.
 
-    Real authentication and RBAC remain enabled in the application.
-    This override only prevents existing API tests from failing with
-    401 before they can test their actual behavior.
+    The database dependency is overridden so API requests use
+    the same SQLite test database as the test itself.
     """
 
     test_user = User(
@@ -46,7 +52,18 @@ def authenticated_test_user():
         is_active=True,
     )
 
-    app.dependency_overrides[get_current_user] = lambda: test_user
+    db_session.add(test_user)
+    db_session.commit()
+    db_session.refresh(test_user)
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    app.dependency_overrides[get_current_user] = (
+        lambda: test_user
+    )
 
     yield test_user
 

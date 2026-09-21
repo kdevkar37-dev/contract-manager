@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ai.extraction.financial import FinancialExtractionService
 from ai.rag.contract_indexing import ContractIndexingService
 
+from backend.app.core.contract_status import ContractStatus
 from backend.app.repositories.contract_documents import (
     ContractDocumentRepository,
 )
@@ -36,21 +37,10 @@ class ContractProcessingService:
         self.document_service = ContractDocumentService()
         self.indexing_service = ContractIndexingService()
 
-        self.contract_information_service = (
-            ContractInformationService(db)
-        )
-
-        self.financial_extraction_service = (
-            FinancialExtractionService()
-        )
-
-        self.financial_analysis_service = (
-            FinancialAnalysisService(db)
-        )
-
-        self.risk_analysis_service = (
-            RiskAnalysisService(db)
-        )
+        self.contract_information_service = ContractInformationService(db)
+        self.financial_extraction_service = FinancialExtractionService()
+        self.financial_analysis_service = FinancialAnalysisService(db)
+        self.risk_analysis_service = RiskAnalysisService(db)
 
     def extract_contract_text(
         self,
@@ -82,12 +72,8 @@ class ContractProcessingService:
 
         self.repository.update_status(
             contract,
-            "processing",
+            ContractStatus.PROCESSING,
         )
-
-        # ---------------------------------------------------------
-        # REUSE EXISTING DOCUMENT RECORD
-        # ---------------------------------------------------------
 
         document = self.document_repository.get_by_contract_id(
             contract.id
@@ -96,6 +82,10 @@ class ContractProcessingService:
         if document is None:
             document = self.document_repository.create(
                 contract.id
+            )
+        else:
+            self.document_repository.reset_for_retry(
+                document
             )
 
         try:
@@ -125,6 +115,11 @@ class ContractProcessingService:
                 extracted_text=extracted_text,
             )
 
+            self.repository.update_status(
+                contract,
+                ContractStatus.TEXT_EXTRACTED,
+            )
+
             # -----------------------------------------------------
             # RAG INDEXING
             # -----------------------------------------------------
@@ -140,6 +135,16 @@ class ContractProcessingService:
             logger.info(
                 "RAG indexing completed in %.2f seconds",
                 time.perf_counter() - start,
+            )
+
+            self.document_repository.update_status(
+                document,
+                ContractStatus.INDEXED,
+            )
+
+            self.repository.update_status(
+                contract,
+                ContractStatus.INDEXED,
             )
 
             # -----------------------------------------------------
@@ -203,13 +208,28 @@ class ContractProcessingService:
                 time.perf_counter() - start,
             )
 
+            self.document_repository.update_status(
+                document,
+                ContractStatus.ANALYZED,
+            )
+
+            self.repository.update_status(
+                contract,
+                ContractStatus.ANALYZED,
+            )
+
             # -----------------------------------------------------
             # COMPLETE
             # -----------------------------------------------------
 
+            self.document_repository.update_status(
+                document,
+                ContractStatus.COMPLETED,
+            )
+
             self.repository.update_status(
                 contract,
-                "completed",
+                ContractStatus.COMPLETED,
             )
 
             total_time = time.perf_counter() - total_start
@@ -235,7 +255,7 @@ class ContractProcessingService:
 
             self.repository.update_status(
                 contract,
-                "failed",
+                ContractStatus.FAILED,
             )
 
             raise

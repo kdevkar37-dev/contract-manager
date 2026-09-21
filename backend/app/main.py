@@ -8,9 +8,7 @@ from fastapi.responses import JSONResponse
 
 from backend.app.api.health import router as health_router
 from backend.app.api.comparison import router as comparison_router
-from backend.app.api.recommendation import (
-    router as recommendation_router,
-)
+from backend.app.api.recommendation import router as recommendation_router
 from backend.app.api.combined_decision import (
     router as combined_decision_router,
 )
@@ -34,8 +32,9 @@ from backend.app.api.contract_information import (
 from backend.app.api.auth import router as auth_router
 
 from backend.app.core.config import settings
-from backend.app.core.middleware import request_logging_middleware  
+from backend.app.core.middleware import request_logging_middleware
 from backend.app.core.security_headers import security_headers_middleware
+
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +42,11 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Contract Manager API",
 )
+
+
+# ============================================================
+# MIDDLEWARE
+# ============================================================
 
 app.middleware("http")(request_logging_middleware)
 app.middleware("http")(security_headers_middleware)
@@ -80,37 +84,29 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------
-# Router registration
-# ---------------------------------------------------------
+# ============================================================
+# ROUTER REGISTRATION
+# ============================================================
 
 app.include_router(health_router)
 
-# ---------------------------------------------------------
-# Specific/static contract routes
-# These must be registered before /{contract_id}
-# ---------------------------------------------------------
-
+# Static/specific contract routes
 app.include_router(comparison_router)
 app.include_router(recommendation_router)
 app.include_router(combined_decision_router)
 app.include_router(automatic_decision_router)
 app.include_router(decision_workflow_router)
 
-# ---------------------------------------------------------
-# Generic contract routes
-# ---------------------------------------------------------
-
+# Main contract routes
 app.include_router(contracts_router)
 
-# ---------------------------------------------------------
-# Other contract services
-# ---------------------------------------------------------
-
+# Contract services
 app.include_router(intake_router)
 app.include_router(contract_documents_router)
 app.include_router(financial_router)
 app.include_router(risk_router)
 app.include_router(decision_router)
 app.include_router(contract_information_router)
+
+# Authentication
 app.include_router(auth_router)
