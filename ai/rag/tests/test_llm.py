@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from ai.rag.llm import ContractLLMService
+from backend.app.core.config import settings
 
 
 @patch("ai.rag.llm.ChatOllama")
@@ -18,6 +19,7 @@ def test_llm_service_invokes_model(mock_chat_ollama):
     )
 
     mock_chat_ollama.assert_called_once_with(
+        base_url=settings.ollama_base_url,
         model="gemma2:2b",
         temperature=0.0,
     )
@@ -31,12 +33,13 @@ def test_llm_service_invokes_model(mock_chat_ollama):
 
 @patch("ai.rag.llm.ChatOllama")
 def test_llm_service_uses_custom_model(mock_chat_ollama):
-    service = ContractLLMService(
+    ContractLLMService(
         model_name="gemma2:2b",
         temperature=0.2,
     )
 
     mock_chat_ollama.assert_called_once_with(
+        base_url=settings.ollama_base_url,
         model="gemma2:2b",
         temperature=0.2,
     )
