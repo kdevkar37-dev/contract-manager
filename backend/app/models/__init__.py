@@ -6,6 +6,8 @@ from backend.app.models.user import User
 from backend.app.models.decision_score import DecisionScore
 from backend.app.models.contract_information import ContractInformation
 from backend.app.models.audit_log import AuditLog
+from backend.app.models.contract_decision import ContractDecision
+
 
 __all__ = [
     "Contract",
@@ -16,4 +18,5 @@ __all__ = [
     "DecisionScore",
     "ContractInformation",
     "AuditLog",
+    "ContractDecision",
 ]

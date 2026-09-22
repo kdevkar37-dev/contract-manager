@@ -29,6 +29,9 @@ from backend.app.api.decision import router as decision_router
 from backend.app.api.contract_information import (
     router as contract_information_router,
 )
+from backend.app.api.contract_decision import (
+    router as contract_decision_router,
+)
 from backend.app.api.auth import router as auth_router
 
 from backend.app.core.config import settings
@@ -107,6 +110,7 @@ app.include_router(financial_router)
 app.include_router(risk_router)
 app.include_router(decision_router)
 app.include_router(contract_information_router)
+app.include_router(contract_decision_router)
 
 # Authentication
 app.include_router(auth_router)
