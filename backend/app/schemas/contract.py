@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ContractCreate(BaseModel):
@@ -32,7 +32,7 @@ class ContractAskResponse(BaseModel):
     contract_id: str
     question: str
     answer: str
-    sources: list[ContractSource] = []
+    sources: list[ContractSource] = Field(default_factory=list)
 
 
 class ContractResponse(BaseModel):

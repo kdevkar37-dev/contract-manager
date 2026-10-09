@@ -1,16 +1,17 @@
+from __future__ import annotations
+
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ai.rag.chain import ContractRAGChain
-
 from backend.app.core.database import get_db
 from backend.app.core.permissions import (
     require_authenticated,
     require_contract_manager,
 )
+from backend.app.models.user import User
 from backend.app.repositories.contract_documents import (
     ContractDocumentRepository,
 )
@@ -23,6 +24,7 @@ from backend.app.schemas.contract import (
     ContractUpdate,
 )
 from backend.app.services.audit.service import AuditLogService
+from backend.app.services.contract_rag_service import ContractRAGService
 from backend.app.services.contracts.service import ContractService
 from backend.app.workers.tasks import process_contract_task
 
@@ -36,17 +38,13 @@ router = APIRouter(
 )
 
 
-# ============================================================
-# GET ALL CONTRACTS
-# ============================================================
-
 @router.get(
     "/",
     response_model=list[ContractResponse],
 )
 def get_contracts(
     db: Session = Depends(get_db),
-    current_user=Depends(require_authenticated),
+    current_user: User = Depends(require_authenticated),
 ):
     """
     Get all contracts.
@@ -56,15 +54,10 @@ def get_contracts(
         - manager
         - viewer
     """
-
     service = ContractService(db)
 
     return service.get_all_contracts()
 
-
-# ============================================================
-# GET SINGLE CONTRACT
-# ============================================================
 
 @router.get(
     "/{contract_id}",
@@ -73,7 +66,7 @@ def get_contracts(
 def get_contract(
     contract_id: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_authenticated),
+    current_user: User = Depends(require_authenticated),
 ):
     """
     Get a single contract.
@@ -83,7 +76,6 @@ def get_contract(
         - manager
         - viewer
     """
-
     service = ContractService(db)
 
     contract = service.get_contract_by_id(contract_id)
@@ -97,17 +89,13 @@ def get_contract(
     return contract
 
 
-# ============================================================
-# GET PROCESSING STATUS
-# ============================================================
-
 @router.get(
     "/{contract_id}/status",
 )
 def get_contract_processing_status(
     contract_id: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_authenticated),
+    current_user: User = Depends(require_authenticated),
 ):
     """
     Get the current processing status of a contract.
@@ -117,12 +105,9 @@ def get_contract_processing_status(
         - manager
         - viewer
     """
-
     repository = ContractRepository(db)
 
-    contract = repository.get_by_contract_id(
-        contract_id
-    )
+    contract = repository.get_by_contract_id(contract_id)
 
     if contract is None:
         raise HTTPException(
@@ -156,10 +141,54 @@ def get_contract_processing_status(
         ),
     }
 
+@router.get(
+    "/{contract_id}/document",
+)
+def get_contract_document_status(
+    contract_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_authenticated),
+):
+    """
+    Get the latest document processing status for a contract.
 
-# ============================================================
-# CREATE CONTRACT
-# ============================================================
+    Accessible to:
+        - admin
+        - manager
+        - viewer
+    """
+    repository = ContractRepository(db)
+
+    contract = repository.get_by_contract_id(contract_id)
+
+    if contract is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contract not found",
+        )
+
+    document_repository = ContractDocumentRepository(db)
+
+    document = document_repository.get_by_contract_id(
+        contract.id
+    )
+
+    if document is None:
+        return {
+            "contract_id": contract.contract_id,
+            "document_id": None,
+            "processing_status": "pending",
+            "processed_at": None,
+            "error_message": None,
+        }
+
+    return {
+        "contract_id": contract.contract_id,
+        "document_id": document.id,
+        "processing_status": document.processing_status,
+        "processed_at": document.processed_at,
+        "error_message": document.error_message,
+    }
 
 @router.post(
     "/",
@@ -169,7 +198,7 @@ def get_contract_processing_status(
 def create_contract(
     contract_data: ContractCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_contract_manager),
+    current_user: User = Depends(require_contract_manager),
 ):
     """
     Create a new contract.
@@ -178,7 +207,6 @@ def create_contract(
         - admin
         - manager
     """
-
     service = ContractService(db)
 
     try:
@@ -191,10 +219,6 @@ def create_contract(
         ) from exc
 
 
-# ============================================================
-# UPDATE CONTRACT
-# ============================================================
-
 @router.patch(
     "/{contract_id}",
     response_model=ContractResponse,
@@ -203,7 +227,7 @@ def update_contract(
     contract_id: str,
     contract_data: ContractUpdate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_contract_manager),
+    current_user: User = Depends(require_contract_manager),
 ):
     """
     Update an existing contract.
@@ -212,7 +236,6 @@ def update_contract(
         - admin
         - manager
     """
-
     service = ContractService(db)
 
     try:
@@ -236,10 +259,6 @@ def update_contract(
         ) from exc
 
 
-# ============================================================
-# PROCESS / RETRY CONTRACT
-# ============================================================
-
 @router.post(
     "/{contract_id}/process",
     status_code=status.HTTP_202_ACCEPTED,
@@ -247,7 +266,7 @@ def update_contract(
 def process_contract(
     contract_id: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_contract_manager),
+    current_user: User = Depends(require_contract_manager),
 ):
     """
     Queue contract processing using Celery.
@@ -258,12 +277,9 @@ def process_contract(
         - admin
         - manager
     """
-
     repository = ContractRepository(db)
 
-    contract = repository.get_by_contract_id(
-        contract_id
-    )
+    contract = repository.get_by_contract_id(contract_id)
 
     if contract is None:
         raise HTTPException(
@@ -290,9 +306,7 @@ def process_contract(
         )
 
     try:
-        task = process_contract_task.delay(
-            contract_id
-        )
+        task = process_contract_task.delay(contract_id)
 
         is_retry = contract.status == "failed"
 
@@ -324,7 +338,7 @@ def process_contract(
             ),
         }
 
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "Failed to queue contract processing: %s",
             contract_id,
@@ -336,12 +350,8 @@ def process_contract(
                 "Contract processing could not be queued "
                 "due to an internal server error."
             ),
-        )
+        ) from exc
 
-
-# ============================================================
-# ASK CONTRACT USING RAG
-# ============================================================
 
 @router.post(
     "/{contract_id}/ask",
@@ -350,33 +360,64 @@ def process_contract(
 def ask_contract(
     contract_id: str,
     request: ContractAskRequest,
-    current_user=Depends(require_authenticated),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_authenticated),
 ):
     """
-    Ask a question about a contract using RAG.
+    Ask a question about a specific contract using RAG.
 
     Accessible to:
         - admin
         - manager
         - viewer
     """
-
-    rag_chain = ContractRAGChain()
+    service = ContractRAGService(db)
 
     try:
-        result = rag_chain.ask(
+        result = service.ask(
             contract_id=contract_id,
             question=request.question,
         )
+
+        AuditLogService(db).record(
+            user_id=current_user.id,
+            action="CONTRACT_RAG_QUERY",
+            resource_type="contract",
+            resource_id=result.contract_id,
+            details=(
+                f"Contract RAG question submitted: "
+                f"{result.question}"
+            ),
+        )
+
+        db.commit()
 
         return ContractAskResponse(
-            contract_id=contract_id,
-            question=request.question,
-            answer=result["answer"],
-            sources=result["sources"],
+            contract_id=result.contract_id,
+            question=result.question,
+            answer=result.answer,
+            sources=result.sources,
         )
 
-    except Exception:
+    except LookupError as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except ValueError as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        db.rollback()
+
         logger.exception(
             "RAG query failed for contract: %s",
             contract_id,
@@ -384,5 +425,7 @@ def ask_contract(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="RAG query failed due to an internal server error.",
-        )
+            detail=(
+                "RAG query failed due to an internal server error."
+            ),
+        ) from exc

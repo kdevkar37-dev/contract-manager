@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   BarChart3,
   CheckCircle2,
+  Clock3,
   FileText,
   RefreshCw,
   ShieldAlert,
@@ -23,17 +24,12 @@ import TopRecommendation from "../components/dashboard/TopRecommendation";
 
 function Dashboard() {
   const [status, setStatus] = useState("Checking...");
-
   const [contracts, setContracts] = useState<Contract[]>([]);
-
   const [recommendations, setRecommendations] = useState<
     ContractRecommendation[]
   >([]);
-
   const [loading, setLoading] = useState(true);
-
   const [workflowLoading, setWorkflowLoading] = useState(false);
-
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -52,10 +48,7 @@ function Dashboard() {
 
     let hasError = false;
 
-    // ---------------------------------------------------------
-    // Health
-    // ---------------------------------------------------------
-
+    // Backend health
     if (results[0].status === "fulfilled") {
       const health = results[0].value;
 
@@ -67,10 +60,7 @@ function Dashboard() {
       console.error("Health check failed:", results[0].reason);
     }
 
-    // ---------------------------------------------------------
     // Contracts
-    // ---------------------------------------------------------
-
     if (results[1].status === "fulfilled") {
       setContracts(results[1].value);
     } else {
@@ -80,10 +70,7 @@ function Dashboard() {
       console.error("Failed to load contracts:", results[1].reason);
     }
 
-    // ---------------------------------------------------------
     // Recommendations
-    // ---------------------------------------------------------
-
     if (results[2].status === "fulfilled") {
       setRecommendations(results[2].value.recommendations);
     } else {
@@ -125,11 +112,13 @@ function Dashboard() {
     (contract) => contract.status.toLowerCase() === "completed",
   ).length;
 
-  const processingContracts = contracts.filter((contract) => {
-    const contractStatus = contract.status.toLowerCase();
+  const pendingContracts = contracts.filter(
+    (contract) => contract.status.toLowerCase() === "pending",
+  ).length;
 
-    return contractStatus === "processing" || contractStatus === "pending";
-  }).length;
+  const processingContracts = contracts.filter(
+    (contract) => contract.status.toLowerCase() === "processing",
+  ).length;
 
   const failedContracts = contracts.filter(
     (contract) => contract.status.toLowerCase() === "failed",
@@ -139,11 +128,8 @@ function Dashboard() {
     recommendations.length > 0 ? recommendations[0] : null;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      {/* -------------------------------------------------------
-          Header
-      ------------------------------------------------------- */}
-
+    <div className="mx-auto max-w-7xl">
+      {/* Header */}
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -164,6 +150,7 @@ function Dashboard() {
         </div>
 
         <button
+          type="button"
           onClick={handleRunWorkflow}
           disabled={workflowLoading}
           className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -177,10 +164,7 @@ function Dashboard() {
         </button>
       </div>
 
-      {/* -------------------------------------------------------
-          Error
-      ------------------------------------------------------- */}
-
+      {/* Error */}
       {error && (
         <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <ShieldAlert size={18} />
@@ -189,17 +173,11 @@ function Dashboard() {
         </div>
       )}
 
-      {/* -------------------------------------------------------
-          Backend Status
-      ------------------------------------------------------- */}
-
+      {/* Backend Status */}
       <BackendStatus status={status} />
 
-      {/* -------------------------------------------------------
-          Statistics
-      ------------------------------------------------------- */}
-
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Statistics */}
+      <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
         <DashboardStatCard
           title="Total Contracts"
           value={loading ? "—" : contracts.length}
@@ -215,9 +193,16 @@ function Dashboard() {
         />
 
         <DashboardStatCard
+          title="Pending"
+          value={loading ? "—" : pendingContracts}
+          description="Awaiting document processing"
+          icon={<Clock3 size={22} />}
+        />
+
+        <DashboardStatCard
           title="Processing"
           value={loading ? "—" : processingContracts}
-          description="Pending analysis"
+          description="Currently being processed"
           icon={<RefreshCw size={22} />}
         />
 
@@ -229,19 +214,15 @@ function Dashboard() {
         />
       </div>
 
-      {/* -------------------------------------------------------
-          Decision Section
-      ------------------------------------------------------- */}
-
+      {/* Top Recommendation */}
       <div className="mt-8">
         <TopRecommendation recommendation={topRecommendation} />
       </div>
 
-      {/* -------------------------------------------------------
-          Recommendations
-      ------------------------------------------------------- */}
-
-      <RecommendationTable recommendations={recommendations} />
+      {/* Recommendations */}
+      <div className="mt-8">
+        <RecommendationTable recommendations={recommendations} />
+      </div>
     </div>
   );
 }

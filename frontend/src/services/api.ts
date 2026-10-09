@@ -324,3 +324,47 @@ export function runDecisionWorkflow(): Promise<DecisionWorkflowResponse> {
     method: "POST",
   });
 }
+
+/* ---------------------------------------------------------
+   Final Manager Decision
+--------------------------------------------------------- */
+
+export interface FinalDecisionRequest {
+  decision: string;
+  reason: string;
+}
+
+export interface FinalDecision {
+  id: number;
+  contract_id: string;
+  decision: string;
+  reason: string;
+  decided_by: number;
+  created_at: string;
+}
+
+export function createFinalDecision(
+  contractId: string,
+  decision: string,
+  reason: string,
+): Promise<FinalDecision> {
+  return apiClient(`/contracts/${contractId}/final-decision`, {
+    method: "POST",
+    body: JSON.stringify({
+      decision,
+      reason,
+    } satisfies FinalDecisionRequest),
+  });
+}
+
+export function getFinalDecision(
+  contractId: string,
+): Promise<FinalDecision | null> {
+  return apiClient(`/contracts/${contractId}/final-decision`);
+}
+
+export function getFinalDecisionHistory(
+  contractId: string,
+): Promise<FinalDecision[]> {
+  return apiClient(`/contracts/${contractId}/final-decision/history`);
+}
